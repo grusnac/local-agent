@@ -1,9 +1,9 @@
 # Local agent, Windows: Ollama + Open WebUI in Docker, Open Terminal (via uv) on Windows.
-# Usage: agent.ps1 setup | up | down | status | backup | restore <file> | import-models <folder> | pull <model>
+# Usage: agent.ps1 setup | configure | up | down | status | backup | restore <file> | import-models <folder> | pull <model>
 # agent-up.cmd / agent-down.cmd / agent-status.cmd call up / down / status.
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup', 'up', 'down', 'status', 'backup', 'restore', 'import-models', 'pull')]
+    [ValidateSet('setup', 'configure', 'up', 'down', 'status', 'backup', 'restore', 'import-models', 'pull')]
     [string]$Action = 'status',
     [Parameter(Position = 1)][string]$Arg = ''
 )
@@ -26,6 +26,16 @@ if (-not (Test-Path $envFile)) {
         "OPEN_TERMINAL_API_KEY=$(New-Secret)"
     ) | Set-Content -Encoding ascii $envFile
     Write-Host 'Created .env (keys for Open WebUI and Open Terminal).'
+}
+
+# Admin login: creates the account on a fresh install; agent configure signs in with it.
+if (-not (Select-String -Path $envFile -Pattern '^WEBUI_ADMIN_EMAIL=' -Quiet)) {
+    @(
+        'WEBUI_ADMIN_NAME=Admin'
+        'WEBUI_ADMIN_EMAIL=admin@example.com'
+        "WEBUI_ADMIN_PASSWORD=$(New-Secret)"
+    ) | Add-Content -Encoding ascii $envFile
+    Write-Host 'Added an admin login to .env (WEBUI_ADMIN_*). If Open WebUI already has an account, put its login there.'
 }
 
 # Defaults; any of these can be set in .env.
@@ -149,6 +159,21 @@ function Restore-WebUi([string]$file) {
     Write-Host "Open WebUI restored from $($item.FullName)"
 }
 
+# ---------------------------------------------------------------- configure
+
+function Invoke-Configure {
+    # Runs configure.py in a throwaway container of the Open WebUI image (it brings its own Python), on the stack's
+    # network: nothing to install here. It signs in with WEBUI_ADMIN_* and sets the Ollama URL, the Open Terminal
+    # connection, the knowledge bases from knowledge.conf and the Agent model.
+    Invoke-Compose up -d open-webui
+    docker run --rm --network local-agent_default --entrypoint python `
+        -e PYTHONUNBUFFERED=1 -e PYTHONDONTWRITEBYTECODE=1 `
+        -e "OT_URL=http://host.docker.internal:$($cfg.OT_PORT)" -e 'OLLAMA_URL=http://ollama:11434' `
+        -v "$($PSScriptRoot):/agent:ro" -v "$($cfg.OT_CWD):/projects:ro" `
+        ghcr.io/open-webui/open-webui:main /agent/configure.py
+    if ($LASTEXITCODE -ne 0) { throw 'configure failed (message above).' }
+}
+
 # ---------------------------------------------------------------- setup
 
 function Invoke-Setup {
@@ -177,13 +202,17 @@ function Invoke-Setup {
     if (Test-Path $agents) { Write-Host "Kept $agents" }
     else { Copy-Item (Join-Path $PSScriptRoot 'AGENTS.example.md') $agents; Write-Host "Created $agents" }
 
-    Write-Host 'Setup done. Next: agent-up.cmd, then the one-time Open WebUI settings in README.md.'
+    Start-Terminal
+    Invoke-Compose up -d --remove-orphans
+    Invoke-Configure
+    Write-Host "Setup done: http://localhost:3000 (login: WEBUI_ADMIN_EMAIL / WEBUI_ADMIN_PASSWORD in .env)."
 }
 
 # ---------------------------------------------------------------- actions
 
 switch ($Action) {
     'setup' { Invoke-Setup }
+    'configure' { Invoke-Configure }
     'up' {
         Start-Terminal
         Invoke-Compose up -d --remove-orphans
