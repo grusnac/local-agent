@@ -4,14 +4,14 @@
 #                  the Windows tools (MSYS2, Visual Studio builds).
 #   open-webui:    always.
 # GPU: docker-compose.gpu.yaml is added on top when an NVIDIA GPU is found.
-# Images are pinned to tested versions (digest = exact image): a pull never swaps them. To upgrade, change the
-# digest here, test, commit.
+# Fixed, tested versions (never latest/main): a pull never brings a new release. To upgrade, change the tags here
+# (and Open Terminal's version in agent.ps1), test, commit.
 name: local-agent
 
 services:
   ollama:
     profiles: ["docker-ollama"]
-    image: ollama/ollama@sha256:b2f0122c476bc9fe7ce679d8bb4bd555351e25e2554eefb156f61cb0a89cf429   # 0.40.13
+    image: ollama/ollama:0.40.13
     container_name: ollama
     restart: unless-stopped
     ports:
@@ -31,7 +31,7 @@ services:
 
   open-terminal:
     profiles: ["docker-terminal"]
-    image: ghcr.io/open-webui/open-terminal@sha256:aa56370e7bdaf13ad84b41881b530877efef168e894db4d74f45487c50d57050   # latest on 2026-10-29
+    image: ghcr.io/open-webui/open-terminal:0.14.6
     container_name: open-terminal
     restart: unless-stopped
     environment:
@@ -42,7 +42,7 @@ services:
       - ${OT_CWD:-..}/AGENTS.md:/home/user/AGENTS.md:ro
 
   open-webui:
-    image: ghcr.io/open-webui/open-webui@sha256:0b399a8ba34558e181d316750455f2a95376a38cd60a61b9c942e138898944bd   # 0.12.4
+    image: ghcr.io/open-webui/open-webui:v0.12.4
     container_name: open-webui
     restart: unless-stopped
     ports:

@@ -62,7 +62,7 @@ $composeArgs += @('--profile', 'docker-ollama')
 $openTerminalVersion = '0.14.6'
 
 # Pinned helper image for copying volumes (backup, restore, import-models).
-$alpine = 'alpine@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a'
+$alpine = 'alpine:3.24.3'
 
 function Invoke-Compose {
     docker compose @composeArgs @args
