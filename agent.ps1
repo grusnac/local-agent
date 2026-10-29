@@ -28,13 +28,25 @@ if (-not (Test-Path $envFile)) {
     Write-Host 'Created .env (keys for Open WebUI and Open Terminal).'
 }
 
+# Appends lines to .env; first ends its last line if an editor saved it without a line break.
+function Add-EnvLines([string[]]$lines) {
+    $text = [IO.File]::ReadAllText($envFile)
+    if ($text.Length -gt 0 -and -not $text.EndsWith("`n")) { $lines = @('') + $lines }
+    $lines | Add-Content -Encoding ascii $envFile
+}
+
+# SearXNG's secret (added to older .env files too).
+if (-not (Select-String -Path $envFile -Pattern '^SEARXNG_SECRET=' -Quiet)) {
+    Add-EnvLines @("SEARXNG_SECRET=$(New-Secret)")
+}
+
 # Admin login: creates the account on a fresh install; agent configure signs in with it.
 if (-not (Select-String -Path $envFile -Pattern '^WEBUI_ADMIN_EMAIL=' -Quiet)) {
-    @(
+    Add-EnvLines @(
         'WEBUI_ADMIN_NAME=Admin'
         'WEBUI_ADMIN_EMAIL=admin@example.com'
         "WEBUI_ADMIN_PASSWORD=$(New-Secret)"
-    ) | Add-Content -Encoding ascii $envFile
+    )
     Write-Host 'Added an admin login to .env (WEBUI_ADMIN_*). If Open WebUI already has an account, put its login there.'
 }
 

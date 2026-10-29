@@ -23,6 +23,10 @@ if [[ ! -f .env ]]; then
     printf 'WEBUI_SECRET_KEY=%s\nOPEN_TERMINAL_API_KEY=%s\n' "$(secret)" "$(secret)" > .env
     say 'Created .env (keys for Open WebUI and Open Terminal).'
 fi
+# Before appending to .env: end its last line if an editor saved it without a line break.
+[[ -z "$(tail -c1 .env)" ]] || echo >> .env
+# SearXNG's secret (added to older .env files too).
+grep -q '^SEARXNG_SECRET=' .env || printf 'SEARXNG_SECRET=%s\n' "$(secret)" >> .env
 # Admin login: creates the account on a fresh install; ./agent.sh configure signs in with it.
 if ! grep -q '^WEBUI_ADMIN_EMAIL=' .env; then
     printf 'WEBUI_ADMIN_NAME=Admin\nWEBUI_ADMIN_EMAIL=admin@example.com\nWEBUI_ADMIN_PASSWORD=%s\n' "$(secret)" >> .env
