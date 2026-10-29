@@ -1,6 +1,8 @@
 # Local agent stack. Started by agent.ps1 (Windows) / agent.sh (Linux, macOS) - use those, not docker compose directly.
-#   ollama:     only with --profile docker-ollama (Windows, Linux). macOS runs Ollama natively: Docker there has no GPU.
-#   open-webui: always.
+#   ollama:        only with --profile docker-ollama (Windows, Linux). macOS runs Ollama natively: Docker there has no GPU.
+#   open-terminal: only with --profile docker-terminal (Linux, macOS). Windows runs it natively, so the agent can use
+#                  the Windows tools (MSYS2, Visual Studio builds).
+#   open-webui:    always.
 # GPU: docker-compose.gpu.yaml is added on top when an NVIDIA GPU is found.
 name: local-agent
 
@@ -25,6 +27,18 @@ services:
       # 13 GB model took minutes to load. Fill it with: agent import-models <folder>, or agent pull <model>.
       - ollama_data:/root/.ollama
 
+  open-terminal:
+    profiles: ["docker-terminal"]
+    image: ghcr.io/open-webui/open-terminal:latest
+    container_name: open-terminal
+    restart: unless-stopped
+    environment:
+      - OPEN_TERMINAL_API_KEY=${OPEN_TERMINAL_API_KEY:?missing - run agent setup, it creates .env}
+    volumes:
+      # The projects folder (OT_CWD, set by agent.sh) under the terminal's home; Open WebUI reads AGENTS.md from home.
+      - ${OT_CWD:-..}:/home/user/projects
+      - ${OT_CWD:-..}/AGENTS.md:/home/user/AGENTS.md:ro
+
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: open-webui
@@ -42,6 +56,10 @@ services:
       - ENABLE_TAGS_GENERATION=False
       - ENABLE_MEMORIES=True
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?missing - run agent setup, it creates .env}
+      # Creates the admin account when there is none yet (fresh install); agent configure signs in with it.
+      - WEBUI_ADMIN_EMAIL=${WEBUI_ADMIN_EMAIL:-}
+      - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD:-}
+      - WEBUI_ADMIN_NAME=${WEBUI_ADMIN_NAME:-Admin}
       # Needed for the Open Terminal connection (Admin > Integrations).
       - ENABLE_TOOL_SERVERS=True
     extra_hosts:
