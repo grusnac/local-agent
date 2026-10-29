@@ -36,7 +36,8 @@ before `setup` / `configure`.
 | **Agent** model: base model, system prompt, terminal pre-selected, memory, native tool calls, knowledge | `DEFAULT_MODEL`, `system-prompt.md`, `knowledge.conf` |
 
 First start only (from `docker-compose.yaml`): admin account, default model, task model = chat model, follow-up and
-tags generation off, memory on.
+tags generation off, memory on, English interface. A browser that already chose a language keeps it: Settings >
+General > Language. The Agent answers in English (`system-prompt.md`).
 
 ## Other commands
 

@@ -57,6 +57,8 @@ services:
       - ENABLE_FOLLOW_UP_GENERATION=False
       - ENABLE_TAGS_GENERATION=False
       - ENABLE_MEMORIES=True
+      # Interface in English, not the browser's language (a browser that saved its own choice keeps it).
+      - DEFAULT_LOCALE=en-US
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?missing - run agent setup, it creates .env}
       # Creates the admin account when there is none yet (fresh install); agent configure signs in with it.
       - WEBUI_ADMIN_EMAIL=${WEBUI_ADMIN_EMAIL:-}
