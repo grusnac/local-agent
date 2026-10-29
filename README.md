@@ -34,7 +34,7 @@ before `setup` / `configure`.
 | Open Terminal connection + key | `OPEN_TERMINAL_API_KEY` in `.env` |
 | Web search: SearXNG, 3 results | `docker-compose.yaml`, `searxng/settings.yml` |
 | Knowledge bases | `knowledge.conf` (copy `knowledge.example.conf`; git ignores it) |
-| **Agent** model: base model, system prompt, terminal pre-selected, memory, native tool calls, knowledge | `DEFAULT_MODEL`, `system-prompt.md`, `knowledge.conf` |
+| **Agent** model: base model, system prompt, terminal and web search on, memory, native tool calls, knowledge | `DEFAULT_MODEL`, `system-prompt.md`, `knowledge.conf` |
 
 First start only (from `docker-compose.yaml`): admin account, default model, task model = chat model, follow-up and
 tags generation off, memory on, English interface. A browser that already chose a language keeps it: Settings >

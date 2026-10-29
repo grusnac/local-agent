@@ -196,13 +196,16 @@ def set_agent_model(token, terminal_id, knowledge):
                              'citations': True, 'status_updates': True, 'memory': True, 'builtin_tools': True},
             'knowledge': knowledge or None,
             'terminalId': terminal_id,   # the terminal is pre-selected in new chats with this model
+            # Web Search switched on in new chats: only then does the model get the search_web and fetch_url tools.
+            'defaultFeatureIds': ['web_search'],
+            'builtinTools': {'web_search': True},
             'tags': [],
         },
         'params': {'system': system, 'function_calling': 'native'},
     }
     exists = call('GET', '/api/v1/models/model?id=agent', token=token, missing_ok=True)
     call('POST', '/api/v1/models/model/update' if exists else '/api/v1/models/create', token=token, body=form)
-    print(f'Model "Agent": base {DEFAULT_MODEL}, terminal pre-selected, {len(knowledge)} knowledge bases')
+    print(f'Model "Agent": base {DEFAULT_MODEL}, terminal and web search on, {len(knowledge)} knowledge bases')
 
 
 def main():
