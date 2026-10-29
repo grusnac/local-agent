@@ -1,0 +1,55 @@
+# Local agent stack. Started by agent.ps1 (Windows) / agent.sh (Linux, macOS) - use those, not docker compose directly.
+#   ollama:     only with --profile docker-ollama (Windows, Linux). macOS runs Ollama natively: Docker there has no GPU.
+#   open-webui: always.
+# GPU: docker-compose.gpu.yaml is added on top when an NVIDIA GPU is found.
+name: local-agent
+
+services:
+  ollama:
+    profiles: ["docker-ollama"]
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    environment:
+      # Ollama's default context (4096 tokens) is too small for an agent loop.
+      - OLLAMA_CONTEXT_LENGTH=32768
+      # Flash attention + q8_0 KV cache roughly halve the context's VRAM.
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      # Unload after 30 idle minutes: frees the GPU for other work.
+      - OLLAMA_KEEP_ALIVE=30m
+    volumes:
+      # A Docker volume, never a Windows folder: through a bind mount F:\models read at ~140 MB/s (measured) and a
+      # 13 GB model took minutes to load. Fill it with: agent import-models <folder>, or agent pull <model>.
+      - ollama_data:/root/.ollama
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:8080"
+    environment:
+      # Applied on the very first start only: afterwards Open WebUI keeps what is saved in its database
+      # (Admin > Settings). OLLAMA_URL is set by agent.sh on macOS (native Ollama).
+      - OLLAMA_BASE_URL=${OLLAMA_URL:-http://ollama:11434}
+      - DEFAULT_MODELS=${DEFAULT_MODEL:-gpt-oss:20b}
+      # Titles etc. on the chat model, so they never load a second model (only one fits in 16 GB VRAM).
+      - TASK_MODEL=${DEFAULT_MODEL:-gpt-oss:20b}
+      - ENABLE_FOLLOW_UP_GENERATION=False
+      - ENABLE_TAGS_GENERATION=False
+      - ENABLE_MEMORIES=True
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?missing - run agent setup, it creates .env}
+      # Needed for the Open Terminal connection (Admin > Integrations).
+      - ENABLE_TOOL_SERVERS=True
+    extra_hosts:
+      # Reaches Open Terminal (and native Ollama on macOS) on the host.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - open-webui_data:/app/backend/data
+
+volumes:
+  open-webui_data:
+  ollama_data:

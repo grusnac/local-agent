@@ -1,0 +1,10 @@
+# Added on top of docker-compose.yaml when an NVIDIA GPU is found (needs the NVIDIA Container Toolkit on Linux).
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
