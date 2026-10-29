@@ -1,0 +1,6 @@
+# Secrets: keys created by agent setup
+.env
+# Written by the scripts at run time
+*.log
+*.pid
+backups/
