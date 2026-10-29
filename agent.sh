@@ -160,8 +160,13 @@ case "$action" in
         dc ps --format 'table {{.Name}}\t{{.Status}}'
         (( docker_ollama )) || { is_up http://127.0.0.1:11434/api/version && say 'Ollama: running' || say 'Ollama: stopped'; }
         ;;
-    backup)  dc stop open-webui; trap 'dc start open-webui' EXIT; backup ;;
-    restore) dc stop open-webui; trap 'dc start open-webui' EXIT; restore "$arg" ;;
+    backup|restore)
+        # Open WebUI is stopped for a consistent copy, and started again only if it was running.
+        if [[ -n "$(docker ps -q --filter 'name=^open-webui$')" ]]; then
+            dc stop open-webui; trap 'dc start open-webui' EXIT
+        fi
+        if [[ "$action" == backup ]]; then backup; else restore "$arg"; fi
+        ;;
     import-models)
         # One-off: copy Ollama models from a folder (layout <folder>/models/blobs, manifests) into the volume (Linux).
         (( docker_ollama )) || die 'macOS: native Ollama uses its own folder (~/.ollama); nothing to import.'

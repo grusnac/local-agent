@@ -14,7 +14,8 @@ Rules:
   `git diff --stat`, then give one ready-to-run `git commit` command per small change (short message, no attribution
   lines).
 - Keep output small: filter with grep (or Select-String), use quiet flags, never print whole build or test logs.
-- Windows: the terminal is PowerShell. MSYS2 UCRT64 commands run like this, from the folder you are in:
+- Windows: commands run in cmd.exe. For PowerShell: `powershell -NoProfile -Command "<command>"`. MSYS2 UCRT64
+  commands run like this, from the folder you are in:
   `C:\msys64\msys2_shell.cmd -defterm -here -no-start -ucrt64 -c "<command>"`
 - Ask before anything that needs admin rights, installs software, or touches drivers.
 - If a command fails, find the cause from its output before trying something else. Don't guess.

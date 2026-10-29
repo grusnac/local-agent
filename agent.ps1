@@ -233,13 +233,12 @@ switch ($Action) {
         docker compose @composeArgs ps --format 'table {{.Name}}\t{{.Status}}'
         Write-Host "Open Terminal: $(if (Test-Up $ot.Health) { 'running' } else { 'stopped' })"
     }
-    'backup' {
-        Invoke-Compose stop open-webui
-        try { Backup-WebUi } finally { Invoke-Compose start open-webui }
-    }
-    'restore' {
-        Invoke-Compose stop open-webui
-        try { Restore-WebUi $Arg } finally { Invoke-Compose start open-webui }
+    { $_ -in 'backup', 'restore' } {
+        # Open WebUI is stopped for a consistent copy, and started again only if it was running.
+        $running = [bool](docker ps -q --filter 'name=^open-webui$')
+        if ($running) { Invoke-Compose stop open-webui }
+        try { if ($Action -eq 'backup') { Backup-WebUi } else { Restore-WebUi $Arg } }
+        finally { if ($running) { Invoke-Compose start open-webui } }
     }
     'import-models' {
         # One-off: copy Ollama models from a folder (layout <folder>\models\blobs, manifests) into the volume.
