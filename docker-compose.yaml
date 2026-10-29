@@ -2,6 +2,7 @@
 #   ollama:        only with --profile docker-ollama (Windows, Linux). macOS runs Ollama natively: Docker there has no GPU.
 #   open-terminal: only with --profile docker-terminal (Linux, macOS). Windows runs it natively, so the agent can use
 #                  the Windows tools (MSYS2, Visual Studio builds).
+#   searxng:       always: web search for Open WebUI (internal only, no port published).
 #   open-webui:    always.
 # GPU: docker-compose.gpu.yaml is added on top when an NVIDIA GPU is found.
 # Fixed, tested versions (never latest/main): a pull never brings a new release. To upgrade, change the tags here
@@ -41,6 +42,16 @@ services:
       - ${OT_CWD:-..}:/home/user/projects
       - ${OT_CWD:-..}/AGENTS.md:/home/user/AGENTS.md:ro
 
+  searxng:
+    image: searxng/searxng:2026.10.27-b5ed73fcb
+    container_name: searxng
+    restart: unless-stopped
+    environment:
+      - SEARXNG_SECRET=${SEARXNG_SECRET:?missing - run agent setup, it adds it to .env}
+      - SEARXNG_BASE_URL=http://searxng:8080/
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+
   open-webui:
     image: ghcr.io/open-webui/open-webui:v0.12.4
     container_name: open-webui
@@ -57,6 +68,11 @@ services:
       - ENABLE_FOLLOW_UP_GENERATION=False
       - ENABLE_TAGS_GENERATION=False
       - ENABLE_MEMORIES=True
+      # Web search through the searxng service; search queries leave the computer, nothing else does.
+      - ENABLE_WEB_SEARCH=True
+      - WEB_SEARCH_ENGINE=searxng
+      - SEARXNG_QUERY_URL=http://searxng:8080/search?q=<query>
+      - WEB_SEARCH_RESULT_COUNT=3
       # Interface in English, not the browser's language (a browser that saved its own choice keeps it).
       - DEFAULT_LOCALE=en-US
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?missing - run agent setup, it creates .env}

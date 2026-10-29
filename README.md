@@ -1,8 +1,8 @@
 # Local agent
 
 A local AI coding agent in the browser: Open WebUI + Ollama + Open Terminal. It reads and edits files in the
-projects folder this repo sits in (`<projects>/local-agent`), runs commands, and follows the `AGENTS.md` rules.
-Nothing leaves the computer.
+projects folder this repo sits in (`<projects>/local-agent`), runs commands, searches the web, and follows the
+`AGENTS.md` rules. Only web search queries leave the computer (through SearXNG, no account or key).
 
 ## Needs
 
@@ -32,6 +32,7 @@ before `setup` / `configure`.
 |---|---|
 | Ollama connection | per OS |
 | Open Terminal connection + key | `OPEN_TERMINAL_API_KEY` in `.env` |
+| Web search: SearXNG, 3 results | `docker-compose.yaml`, `searxng/settings.yml` |
 | Knowledge bases | `knowledge.conf` (copy `knowledge.example.conf`; git ignores it) |
 | **Agent** model: base model, system prompt, terminal pre-selected, memory, native tool calls, knowledge | `DEFAULT_MODEL`, `system-prompt.md`, `knowledge.conf` |
 
@@ -70,7 +71,10 @@ General > Language. The Agent answers in English (`system-prompt.md`).
 - Ports listen on this computer only. Open Terminal needs its key and accepts only `http://localhost:3000`.
   It is not a sandbox: it can do anything your user can; the no-delete / no-commit rules in `AGENTS.md` are
   instructions to the model, not limits.
-- Fixed versions, tested together: Ollama 0.40.13, Open WebUI 0.12.4, Open Terminal 0.14.6 (`docker-compose.yaml`,
+- Web search: the model searches when it needs to, or turn on Web Search in a chat (next to `+`). Each search
+  adds the results to the model's context, so those answers take a little longer. SearXNG uses ~100-150 MB RAM.
+- Fixed versions, tested together: Ollama 0.40.13, Open WebUI 0.12.4, Open Terminal 0.14.6, SearXNG
+  2026.10.27-b5ed73fcb (`docker-compose.yaml`,
   and `agent.ps1` for the native Open Terminal). To upgrade: change them there, test, commit.
 - Tested on Windows 11 with an NVIDIA GPU. Linux and macOS: not tested yet.
 

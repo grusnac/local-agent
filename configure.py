@@ -110,6 +110,14 @@ def set_terminal(token):
     return mine['id']
 
 
+def set_web_search(token):
+    # Only the web part of the settings: the API keeps every field that is not sent.
+    call('POST', '/api/v1/retrieval/config/update', token=token, body={'web': {
+        'ENABLE_WEB_SEARCH': True, 'WEB_SEARCH_ENGINE': 'searxng',
+        'SEARXNG_QUERY_URL': 'http://searxng:8080/search?q=<query>', 'WEB_SEARCH_RESULT_COUNT': 3}})
+    print('Web search: SearXNG')
+
+
 def read_knowledge_conf():
     """knowledge.conf: one knowledge base per line, `Name: pattern, pattern`, paths relative to the projects
     folder, ** for subfolders."""
@@ -202,6 +210,7 @@ def main():
     token = sign_in()
     set_ollama(token)
     terminal_id = set_terminal(token)
+    set_web_search(token)
     knowledge = sync_knowledge(token)
     set_agent_model(token, terminal_id, knowledge)
     print('Open WebUI configured.')

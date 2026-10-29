@@ -1,0 +1,14 @@
+# SearXNG for the local agent: SearXNG's own defaults plus what Open WebUI needs.
+# server.secret_key comes from SEARXNG_SECRET in .env.
+use_default_settings: true
+
+server:
+  # Only Open WebUI calls it, inside the stack's Docker network (no port is published).
+  limiter: false
+  image_proxy: false
+
+search:
+  # Open WebUI reads JSON results; without "json" SearXNG answers 403 Forbidden.
+  formats:
+    - html
+    - json
