@@ -11,6 +11,15 @@ projects folder this repo sits in (`<projects>/local-agent`), runs commands, sea
 - **Windows:** in Docker Desktop, set Settings > VM resources > Disk image location to a drive with room for the
   models (~15 GB each). `setup` installs uv, which runs Open Terminal natively so the agent can use Windows tools.
 
+## GPU
+
+| | Windows | Linux | macOS |
+|---|---|---|---|
+| NVIDIA | yes (tested) | yes, untested (NVIDIA Container Toolkit) | - |
+| Apple Silicon | - | - | yes, untested (native Ollama, Metal) |
+| AMD | no: Docker Desktop passes only NVIDIA GPUs to containers, Ollama would run on the CPU | not yet: needs Ollama's ROCm image | - |
+| none | CPU only: works, very slow | CPU only | - |
+
 ## Start
 
 | Windows | Linux, macOS | |
