@@ -69,6 +69,8 @@ tags generation off, memory on.
 - Ports listen on this computer only. Open Terminal needs its key and accepts only `http://localhost:3000`.
   It is not a sandbox: it can do anything your user can; the no-delete / no-commit rules in `AGENTS.md` are
   instructions to the model, not limits.
+- Versions are pinned (tested together): Ollama 0.40.13, Open WebUI 0.12.4, Open Terminal 0.14.6 (Docker image: the 2026-10-29 build), by digest in
+  `docker-compose.yaml` and `agent.ps1`. To upgrade: change them there, test, commit.
 - Tested on Windows 11 with an NVIDIA GPU. Linux and macOS: not tested yet.
 
 ## Troubleshooting

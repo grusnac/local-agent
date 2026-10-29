@@ -58,6 +58,12 @@ $composeArgs = @('-f', 'docker-compose.yaml')
 if ($hasGpu) { $composeArgs += @('-f', 'docker-compose.gpu.yaml') }
 $composeArgs += @('--profile', 'docker-ollama')
 
+# Pinned native Open Terminal (uvx), the tested version: a new release never slips in.
+$openTerminalVersion = '0.14.6'
+
+# Pinned helper image for copying volumes (backup, restore, import-models).
+$alpine = 'alpine@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a'
+
 function Invoke-Compose {
     docker compose @composeArgs @args
     if ($LASTEXITCODE -ne 0) { throw "docker compose $args failed (is Docker Desktop running?)." }
@@ -120,7 +126,7 @@ function Start-Terminal {
     $uvx = Find-Uvx
     if (-not $uvx) { throw 'uvx not found: run agent.ps1 setup.' }
     $env:OPEN_TERMINAL_API_KEY = $cfg.OPEN_TERMINAL_API_KEY   # through the environment, not the command line
-    $command = "`"$uvx`" open-terminal run --cwd `"$($cfg.OT_CWD)`" --host $($cfg.OT_HOST) --port $($cfg.OT_PORT) " +
+    $command = "`"$uvx`" open-terminal@$openTerminalVersion run --cwd `"$($cfg.OT_CWD)`" --host $($cfg.OT_HOST) --port $($cfg.OT_PORT) " +
         "--cors-allowed-origins http://localhost:3000"
     # Outer quotes: cmd /c strips the first and last quote when the line starts with one.
     $run = "$command > `"$($ot.Out)`" 2> `"$($ot.Err)`""
@@ -144,7 +150,7 @@ function Backup-WebUi {
     # cache/ (downloaded embedding models etc.) is left out: Open WebUI fetches it again.
     New-Item -ItemType Directory -Force $cfg.BACKUP_DIR | Out-Null
     $name = "open-webui-$(Get-Date -Format 'yyyyMMdd-HHmmss').tgz"
-    docker run --rm -v local-agent_open-webui_data:/data:ro -v "$($cfg.BACKUP_DIR):/backup" alpine `
+    docker run --rm -v local-agent_open-webui_data:/data:ro -v "$($cfg.BACKUP_DIR):/backup" $alpine `
         tar czf "/backup/$name" --exclude=./cache -C /data .
     if ($LASTEXITCODE -ne 0) { throw 'Backup failed.' }
     Write-Host "Open WebUI backed up to $(Join-Path $cfg.BACKUP_DIR $name)"
@@ -153,7 +159,7 @@ function Backup-WebUi {
 function Restore-WebUi([string]$file) {
     if (-not $file -or -not (Test-Path $file)) { throw 'Usage: agent.ps1 restore <backup .tgz>' }
     $item = Get-Item $file
-    docker run --rm -v local-agent_open-webui_data:/data -v "$($item.DirectoryName):/backup:ro" alpine `
+    docker run --rm -v local-agent_open-webui_data:/data -v "$($item.DirectoryName):/backup:ro" $alpine `
         sh -c "rm -rf /data/* && tar xzf '/backup/$($item.Name)' -C /data"
     if ($LASTEXITCODE -ne 0) { throw 'Restore failed.' }
     Write-Host "Open WebUI restored from $($item.FullName)"
@@ -166,11 +172,12 @@ function Invoke-Configure {
     # network: nothing to install here. It signs in with WEBUI_ADMIN_* and sets the Ollama URL, the Open Terminal
     # connection, the knowledge bases from knowledge.conf and the Agent model.
     Invoke-Compose up -d open-webui
-    docker run --rm --network local-agent_default --entrypoint python `
+    # compose run: the same pinned image and network as the open-webui service.
+    Invoke-Compose run --rm --no-deps --entrypoint python `
         -e PYTHONUNBUFFERED=1 -e PYTHONDONTWRITEBYTECODE=1 `
         -e "OT_URL=http://host.docker.internal:$($cfg.OT_PORT)" -e 'OLLAMA_URL=http://ollama:11434' `
         -v "$($PSScriptRoot):/agent:ro" -v "$($cfg.OT_CWD):/projects:ro" `
-        ghcr.io/open-webui/open-webui:main /agent/configure.py
+        open-webui /agent/configure.py
     if ($LASTEXITCODE -ne 0) { throw 'configure failed (message above).' }
 }
 
@@ -240,7 +247,7 @@ switch ($Action) {
         Invoke-Compose create ollama
         Invoke-Compose stop ollama
         Write-Host "Copying $Arg into the ollama_data volume (a Windows folder reads slowly, ~140 MB/s)..."
-        docker run --rm -v "$($Arg):/src:ro" -v local-agent_ollama_data:/dst alpine cp -a /src/models /dst/
+        docker run --rm -v "$($Arg):/src:ro" -v local-agent_ollama_data:/dst $alpine cp -a /src/models /dst/
         if ($LASTEXITCODE -ne 0) { throw 'Copy failed.' }
         Start-Ollama
         docker exec ollama ollama list

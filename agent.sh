@@ -56,6 +56,9 @@ fi
 export OLLAMA_URL                                 # first-start default in docker-compose.yaml
 OT_URL=http://open-terminal:8000
 
+# Pinned helper image for copying volumes (backup, restore, import-models).
+alpine=alpine@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
+
 dc() { docker compose "${compose_files[@]}" "${profiles[@]}" "$@"; }
 
 is_up() { curl -fsS -m 2 -o /dev/null "$1" 2>/dev/null; }
@@ -95,17 +98,18 @@ configure() {
     # Runs configure.py in a throwaway container of the Open WebUI image (it brings its own Python), on the stack's
     # network: nothing to install here.
     dc up -d open-webui
-    docker run --rm --network local-agent_default --entrypoint python \
+    # compose run: the same pinned image and network as the open-webui service.
+    dc run --rm --no-deps --entrypoint python \
         -e PYTHONUNBUFFERED=1 -e PYTHONDONTWRITEBYTECODE=1 -e "OT_URL=$OT_URL" -e "OLLAMA_URL=$OLLAMA_URL" \
         -v "$here:/agent:ro" -v "$OT_CWD:/projects:ro" \
-        ghcr.io/open-webui/open-webui:main /agent/configure.py
+        open-webui /agent/configure.py
 }
 
 backup() {
     # Open WebUI must be stopped, so its database is consistent in the copy. cache/ is fetched again by Open WebUI.
     mkdir -p "$BACKUP_DIR"
     local name; name="open-webui-$(date +%Y%m%d-%H%M%S).tgz"
-    docker run --rm -v local-agent_open-webui_data:/data:ro -v "$BACKUP_DIR:/backup" alpine \
+    docker run --rm -v local-agent_open-webui_data:/data:ro -v "$BACKUP_DIR:/backup" "$alpine" \
         tar czf "/backup/$name" --exclude=./cache -C /data .
     say "Open WebUI backed up to $BACKUP_DIR/$name"
 }
@@ -113,7 +117,7 @@ backup() {
 restore() {
     [[ -n "$1" && -f "$1" ]] || die 'Usage: ./agent.sh restore <backup .tgz>'
     local dir file; dir="$(cd "$(dirname "$1")" && pwd)"; file="$(basename "$1")"
-    docker run --rm -v local-agent_open-webui_data:/data -v "$dir:/backup:ro" alpine \
+    docker run --rm -v local-agent_open-webui_data:/data -v "$dir:/backup:ro" "$alpine" \
         sh -c "rm -rf /data/* && tar xzf '/backup/$file' -C /data"
     say "Open WebUI restored from $dir/$file"
 }
@@ -163,7 +167,7 @@ case "$action" in
         (( docker_ollama )) || die 'macOS: native Ollama uses its own folder (~/.ollama); nothing to import.'
         [[ -n "$arg" && -d "$arg/models" ]] || die 'Usage: ./agent.sh import-models <folder with a models subfolder>'
         dc create ollama; dc stop ollama
-        docker run --rm -v "$(cd "$arg" && pwd):/src:ro" -v local-agent_ollama_data:/dst alpine cp -a /src/models /dst/
+        docker run --rm -v "$(cd "$arg" && pwd):/src:ro" -v local-agent_ollama_data:/dst "$alpine" cp -a /src/models /dst/
         start_ollama
         ollama_cmd list
         ;;
