@@ -1,4 +1,4 @@
-# Local agent, Windows: Ollama + Open WebUI in Docker, Open Terminal (via uv) on Windows.
+# Local agent, Windows: Ollama, Open Terminal and Open WebUI in Docker. Needs only Docker Desktop.
 # Usage: agent.ps1 setup | configure | up | down | status | backup | restore <file> | import-models <folder> | pull <model>
 # agent-up.cmd / agent-down.cmd / agent-status.cmd call up / down / status.
 param(
@@ -52,8 +52,6 @@ if (-not (Select-String -Path $envFile -Pattern '^WEBUI_ADMIN_EMAIL=' -Quiet)) {
 
 # Defaults; any of these can be set in .env.
 $cfg = @{
-    OT_HOST       = '127.0.0.1'                            # Docker Desktop forwards host.docker.internal here
-    OT_PORT       = '8000'
     OT_CWD        = (Split-Path $PSScriptRoot -Parent)     # the projects folder this repo sits in
     BACKUP_DIR    = (Join-Path $PSScriptRoot 'backups')
     DEFAULT_MODEL = 'gpt-oss:20b'
@@ -61,17 +59,16 @@ $cfg = @{
 foreach ($line in Get-Content $envFile) {
     if ($line -match '^\s*([A-Z_]+)\s*=\s*(.*?)\s*$') { $cfg[$Matches[1]] = $Matches[2] }
 }
-$env:DEFAULT_MODEL = $cfg.DEFAULT_MODEL   # read by docker-compose.yaml
+# Read by docker-compose.yaml.
+$env:DEFAULT_MODEL = $cfg.DEFAULT_MODEL
+$env:OT_CWD = $cfg.OT_CWD
 
 # ---------------------------------------------------------------- docker
 
 $hasGpu = [bool](Get-Command nvidia-smi -ErrorAction SilentlyContinue)
 $composeArgs = @('-f', 'docker-compose.yaml')
 if ($hasGpu) { $composeArgs += @('-f', 'docker-compose.gpu.yaml') }
-$composeArgs += @('--profile', 'docker-ollama')
-
-# Pinned native Open Terminal (uvx), the tested version: a new release never slips in.
-$openTerminalVersion = '0.14.6'
+$composeArgs += @('--profile', 'docker-ollama', '--profile', 'docker-terminal')
 
 # Pinned helper image for copying volumes (backup, restore, import-models).
 $alpine = 'alpine:3.24.3'
@@ -101,60 +98,6 @@ function Start-Ollama {
     Wait-Ollama
 }
 
-# ---------------------------------------------------------------- Open Terminal (native)
-
-$ot = @{
-    Health = "http://$($cfg.OT_HOST):$($cfg.OT_PORT)/health"
-    Pid    = Join-Path $PSScriptRoot 'open-terminal.pid'
-    Out    = Join-Path $PSScriptRoot 'open-terminal.log'
-    Err    = Join-Path $PSScriptRoot 'open-terminal.err.log'
-}
-
-function Test-Up([string]$url) {
-    try { (Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 $url).StatusCode -eq 200 } catch { $false }
-}
-
-function Find-Uvx {
-    # uv's installer puts uvx in ~\.local\bin; a window opened before the install may not have it on PATH yet.
-    $uvx = (Get-Command uvx -ErrorAction SilentlyContinue).Source
-    if (-not $uvx -and (Test-Path "$HOME\.local\bin\uvx.exe")) { $uvx = "$HOME\.local\bin\uvx.exe" }
-    $uvx
-}
-
-function Stop-Terminal {
-    if (-not (Test-Path $ot.Pid)) { return }
-    $id = [int](Get-Content $ot.Pid)
-    if (Get-Process -Id $id -ErrorAction SilentlyContinue) {
-        # /T: the pid is the hidden cmd; stop the whole tree (uvx -> python).
-        & taskkill.exe /PID $id /T /F | Out-Null
-        Write-Host "Open Terminal stopped (pid $id)."
-    }
-    Remove-Item $ot.Pid
-}
-
-function Start-Terminal {
-    if (Test-Up $ot.Health) { Write-Host 'Open Terminal already running.'; return }
-    Stop-Terminal
-    $uvx = Find-Uvx
-    if (-not $uvx) { throw 'uvx not found: run agent.ps1 setup.' }
-    $env:OPEN_TERMINAL_API_KEY = $cfg.OPEN_TERMINAL_API_KEY   # through the environment, not the command line
-    $command = "`"$uvx`" open-terminal@$openTerminalVersion run --cwd `"$($cfg.OT_CWD)`" --host $($cfg.OT_HOST) --port $($cfg.OT_PORT) " +
-        "--cors-allowed-origins http://localhost:3000"
-    # Outer quotes: cmd /c strips the first and last quote when the line starts with one.
-    $run = "$command > `"$($ot.Out)`" 2> `"$($ot.Err)`""
-    $p = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', "`"$run`"" -WorkingDirectory $cfg.OT_CWD `
-        -WindowStyle Hidden -PassThru
-    Set-Content -Encoding ascii $ot.Pid $p.Id
-    Write-Host -NoNewline 'Waiting for Open Terminal'
-    for ($i = 0; $i -lt 120; $i++) {
-        if (Test-Up $ot.Health) { Write-Host " ready in $($cfg.OT_CWD)."; return }
-        if ($p.HasExited) { break }
-        Start-Sleep -Seconds 1; Write-Host -NoNewline '.'
-    }
-    Write-Host ''
-    throw "Open Terminal did not start. See $($ot.Err)"
-}
-
 # ---------------------------------------------------------------- backup
 
 function Backup-WebUi {
@@ -171,8 +114,11 @@ function Backup-WebUi {
 function Restore-WebUi([string]$file) {
     if (-not $file -or -not (Test-Path $file)) { throw 'Usage: agent.ps1 restore <backup .tgz>' }
     $item = Get-Item $file
+    Write-Host 'Saving the current data first, in case you want it back.'
+    Backup-WebUi
+    # find, not rm -rf /data/*: the * leaves hidden files behind.
     docker run --rm -v local-agent_open-webui_data:/data -v "$($item.DirectoryName):/backup:ro" $alpine `
-        sh -c "rm -rf /data/* && tar xzf '/backup/$($item.Name)' -C /data"
+        sh -c "find /data -mindepth 1 -delete && tar xzf '/backup/$($item.Name)' -C /data"
     if ($LASTEXITCODE -ne 0) { throw 'Restore failed.' }
     Write-Host "Open WebUI restored from $($item.FullName)"
 }
@@ -187,7 +133,7 @@ function Invoke-Configure {
     # compose run: the same pinned image and network as the open-webui service.
     Invoke-Compose run --rm --no-deps --entrypoint python `
         -e PYTHONUNBUFFERED=1 -e PYTHONDONTWRITEBYTECODE=1 `
-        -e "OT_URL=http://host.docker.internal:$($cfg.OT_PORT)" -e 'OLLAMA_URL=http://ollama:11434' `
+        -e 'OT_URL=http://open-terminal:8000' -e 'OLLAMA_URL=http://ollama:11434' `
         -v "$($PSScriptRoot):/agent:ro" -v "$($cfg.OT_CWD):/projects:ro" `
         open-webui /agent/configure.py
     if ($LASTEXITCODE -ne 0) { throw 'configure failed (message above).' }
@@ -199,14 +145,7 @@ function Invoke-Setup {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw 'Docker not found: install Docker Desktop.' }
     if (-not (Test-Quiet 'docker info')) { throw 'Docker is not running: start Docker Desktop.' }
     Write-Host 'Docker: ok'
-    if (-not (Find-Uvx)) {
-        Write-Host 'Installing uv (runs Open Terminal)...'
-        powershell -NoProfile -ExecutionPolicy ByPass -c 'irm https://astral.sh/uv/install.ps1 | iex'
-        if (-not (Find-Uvx)) { throw 'uv install failed.' }
-    }
-    Write-Host 'uv: ok'
     if ($hasGpu) { Write-Host 'NVIDIA GPU: ok' } else { Write-Host 'No NVIDIA GPU found: Ollama will run on the CPU (slow).' }
-    if (-not (Test-Path 'C:\msys64\msys2_shell.cmd')) { Write-Host 'MSYS2 not at C:\msys64: the AGENTS.md build commands expect it.' }
 
     Invoke-Compose pull
     Start-Ollama
@@ -221,7 +160,6 @@ function Invoke-Setup {
     if (Test-Path $agents) { Write-Host "Kept $agents" }
     else { Copy-Item (Join-Path $PSScriptRoot 'AGENTS.example.md') $agents; Write-Host "Created $agents" }
 
-    Start-Terminal
     Invoke-Compose up -d --remove-orphans
     Invoke-Configure
     Write-Host "Setup done: http://localhost:3000 (login: WEBUI_ADMIN_EMAIL / WEBUI_ADMIN_PASSWORD in .env)."
@@ -233,18 +171,11 @@ switch ($Action) {
     'setup' { Invoke-Setup }
     'configure' { Invoke-Configure }
     'up' {
-        Start-Terminal
         Invoke-Compose up -d --remove-orphans
         Write-Host 'Open WebUI: http://localhost:3000'
     }
-    'down' {
-        Invoke-Compose down --remove-orphans
-        Stop-Terminal
-    }
-    'status' {
-        docker compose @composeArgs ps --format 'table {{.Name}}\t{{.Status}}'
-        Write-Host "Open Terminal: $(if (Test-Up $ot.Health) { 'running' } else { 'stopped' })"
-    }
+    'down' { Invoke-Compose down --remove-orphans }
+    'status' { docker compose @composeArgs ps --format 'table {{.Name}}\t{{.Status}}' }
     { $_ -in 'backup', 'restore' } {
         # Open WebUI is stopped for a consistent copy, and started again only if it was running.
         $running = [bool](docker ps -q --filter 'name=^open-webui$')

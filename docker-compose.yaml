@@ -1,12 +1,13 @@
 # Local agent stack. Started by agent.ps1 (Windows) / agent.sh (Linux, macOS) - use those, not docker compose directly.
 #   ollama:        only with --profile docker-ollama (Windows, Linux). macOS runs Ollama natively: Docker there has no GPU.
-#   open-terminal: only with --profile docker-terminal (Linux, macOS). Windows runs it natively, so the agent can use
-#                  the Windows tools (MSYS2, Visual Studio builds).
+#   open-terminal: only with --profile docker-terminal (every OS): the agent runs Linux commands on the mounted
+#                  projects folder. Nothing to install on the computer.
 #   searxng:       always: web search for Open WebUI (internal only, no port published).
 #   open-webui:    always.
 # GPU: docker-compose.gpu.yaml is added on top when an NVIDIA GPU is found.
-# Fixed, tested versions (never latest/main): a pull never brings a new release. To upgrade, change the tags here
-# (and Open Terminal's version in agent.ps1), test, commit.
+# restart: "no" everywhere: nothing starts on its own (also after a reboot), only agent up / down.
+# Fixed, tested versions (never latest/main): a pull never brings a new release. To upgrade, change the tags here,
+# test, commit.
 name: local-agent
 
 services:
@@ -14,7 +15,7 @@ services:
     profiles: ["docker-ollama"]
     image: ollama/ollama:0.40.13
     container_name: ollama
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "127.0.0.1:11434:11434"
     environment:
@@ -34,7 +35,7 @@ services:
     profiles: ["docker-terminal"]
     image: ghcr.io/open-webui/open-terminal:0.14.6
     container_name: open-terminal
-    restart: unless-stopped
+    restart: "no"
     environment:
       - OPEN_TERMINAL_API_KEY=${OPEN_TERMINAL_API_KEY:?missing - run agent setup, it creates .env}
     volumes:
@@ -45,7 +46,7 @@ services:
   searxng:
     image: searxng/searxng:2026.10.27-b5ed73fcb
     container_name: searxng
-    restart: unless-stopped
+    restart: "no"
     environment:
       - SEARXNG_SECRET=${SEARXNG_SECRET:?missing - run agent setup, it adds it to .env}
       - SEARXNG_BASE_URL=http://searxng:8080/
@@ -55,7 +56,7 @@ services:
   open-webui:
     image: ghcr.io/open-webui/open-webui:v0.12.4
     container_name: open-webui
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "127.0.0.1:3000:8080"
     environment:
@@ -83,7 +84,7 @@ services:
       # Needed for the Open Terminal connection (Admin > Integrations).
       - ENABLE_TOOL_SERVERS=True
     extra_hosts:
-      # Reaches Open Terminal (and native Ollama on macOS) on the host.
+      # Reaches native Ollama on macOS.
       - "host.docker.internal:host-gateway"
     volumes:
       - open-webui_data:/app/backend/data
