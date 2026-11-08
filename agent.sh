@@ -92,7 +92,11 @@ start_ollama() {
 
 stop_ollama() {   # macOS: only an Ollama this script started
     [[ -f ollama.pid ]] || return 0
-    kill -TERM "$(cat ollama.pid)" 2>/dev/null && say 'Ollama stopped.' || true
+    local pid; pid="$(cat ollama.pid)"
+    # After a reboot the pid may belong to another process: stop it only if it is still ollama.
+    if [[ "$(ps -p "$pid" -o comm= 2>/dev/null)" == *ollama* ]]; then
+        kill -TERM "$pid" 2>/dev/null && say 'Ollama stopped.' || true
+    fi
     rm -f ollama.pid
 }
 
@@ -121,8 +125,11 @@ backup() {
 restore() {
     [[ -n "$1" && -f "$1" ]] || die 'Usage: ./agent.sh restore <backup .tgz>'
     local dir file; dir="$(cd "$(dirname "$1")" && pwd)"; file="$(basename "$1")"
+    say 'Saving the current data first, in case you want it back.'
+    backup
+    # find, not rm -rf /data/*: the * leaves hidden files behind.
     docker run --rm -v local-agent_open-webui_data:/data -v "$dir:/backup:ro" "$alpine" \
-        sh -c "rm -rf /data/* && tar xzf '/backup/$file' -C /data"
+        sh -c "find /data -mindepth 1 -delete && tar xzf '/backup/$file' -C /data"
     say "Open WebUI restored from $dir/$file"
 }
 
