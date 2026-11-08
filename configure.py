@@ -208,6 +208,19 @@ def set_agent_model(token, terminal_id, knowledge):
     print(f'Model "Agent": base {DEFAULT_MODEL}, terminal and web search on, {len(knowledge)} knowledge bases')
 
 
+def set_default_model(token):
+    """New chats open on Agent. The API overwrites every field it is not sent: send back what it has."""
+    config = call('GET', '/api/v1/configs/models', token=token) or {}
+    if config.get('DEFAULT_MODELS') == 'agent':
+        print('Default model: Agent (unchanged)')
+        return
+    for key in ('DEFAULT_PINNED_MODELS', 'MODEL_ORDER_LIST'):   # required by the form, may be unset
+        config.setdefault(key, None)
+    config['DEFAULT_MODELS'] = 'agent'
+    call('POST', '/api/v1/configs/models', token=token, body=config)
+    print('Default model: Agent')
+
+
 def main():
     wait_for_webui()
     token = sign_in()
@@ -216,6 +229,7 @@ def main():
     set_web_search(token)
     knowledge = sync_knowledge(token)
     set_agent_model(token, terminal_id, knowledge)
+    set_default_model(token)
     print('Open WebUI configured.')
 
 
